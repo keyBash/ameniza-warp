@@ -1,0 +1,11 @@
+[Unit]
+Description=Route RU traffic from Amnezia via WARP
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ru-warp.sh
+
+[Install]
+WantedBy=multi-user.target
