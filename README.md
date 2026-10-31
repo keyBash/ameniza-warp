@@ -34,16 +34,22 @@ VPS за границей (AmneziaWG в Docker)
 
 1. Найти рабочий IP и подготовить сервер (разделы 1–2 ниже).
 2. Установить Amnezia через приложение (раздел 3).
-3. С ПК закинуть папку репозитория на сервер:
+3. Запустить установку на сервере.
+
+   **Если репозиторий публичный** — одна команда на сервере:
+   ```bash
+   cd /root && git clone https://github.com/keyBash/ameniza-warp && bash ameniza-warp/install.sh
+   ```
+   При повторном запуске, если папка уже есть: `cd /root/ameniza-warp && git pull && bash install.sh`.
+
+   **Если репозиторий приватный** — сначала с ПК закинуть папку на сервер, потом запустить:
    ```powershell
    scp -r ПУТЬ\К\ameniza-warp root@НОВЫЙ_IP:/root/
+   ssh root@НОВЫЙ_IP "bash /root/ameniza-warp/install.sh"
    ```
-4. На сервере:
-   ```bash
-   bash /root/ameniza-warp/install.sh
-   ```
+
    Скрипт сам поставит пакеты, зарегистрирует WARP, проверит его, установит правила и автозапуск.
-5. Проверить с ПК (раздел 6) и на сервере командой `ru-warp-status`, затем `reboot` и проверить ещё раз.
+4. Проверить с ПК (раздел 6) и на сервере командой `ru-warp-status`, затем `reboot` и проверить ещё раз.
 
 Если bash ругается `$'\r': command not found`, файлы пришли с windows-переводами строк. Исправляется так: `sed -i 's/\r$//' /root/ameniza-warp/*`.
 
