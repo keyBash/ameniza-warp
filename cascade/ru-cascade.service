@@ -1,0 +1,12 @@
+[Unit]
+Description=Cascade: RU traffic direct, the rest via AmneziaWG tunnel abroad
+After=docker.service network-online.target awg-quick@fi.service
+Wants=network-online.target awg-quick@fi.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/local/sbin/ru-cascade.sh
+
+[Install]
+WantedBy=multi-user.target
