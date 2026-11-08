@@ -21,7 +21,7 @@ sed -i 's/\r$//' "$DIR"/ru-cascade*.sh "$DIR"/ru-cascade*.service "$DIR"/ru-casc
 
 echo "[1/5] Пакеты AmneziaWG (может занять несколько минут - собирается модуль ядра)"
 apt-get update -qq
-apt-get install -y -qq software-properties-common ipset curl "linux-headers-$(uname -r)"
+apt-get install -y -qq software-properties-common ipset curl "linux-headers-$(uname -r)" linux-headers-generic
 add-apt-repository -y ppa:amnezia/ppa >/dev/null
 apt-get update -qq
 apt-get install -y -qq amneziawg
