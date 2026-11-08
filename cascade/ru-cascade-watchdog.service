@@ -1,0 +1,7 @@
+[Unit]
+Description=Cascade tunnel watchdog
+After=ru-cascade.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ru-cascade-watchdog.sh

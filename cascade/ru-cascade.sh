@@ -2,14 +2,18 @@
 # Российский входной узел каскада.
 # Трафик клиентов Amnezia:
 #   - к российским IP      -> напрямую с этого сервера (eth0)
+#   - DNS-запросы          -> через туннель, а если он мёртв - напрямую
 #   - ко всему остальному  -> через туннель AmneziaWG "fi" на зарубежный сервер
-# Если туннель упал: FALLBACK=block -> зарубежное не открывается (по умолчанию)
-#                    FALLBACK=direct -> зарубежное идёт напрямую с российского IP
+# Живость туннеля проверяет сторож (ru-cascade-watchdog.sh) каждые 30 секунд.
+# Если туннель мёртв: FALLBACK=block -> зарубежное не открывается (по умолчанию)
+#                     FALLBACK=direct -> зарубежное идёт напрямую с российского IP
 # Безопасно запускать повторно.
 set -e
 TUN=fi
 MARK=0x77
 TABLE=200
+DNS_MARK=0x78
+DNS_TABLE=201
 FALLBACK="${FALLBACK:-block}"
 [ -f /etc/default/ru-cascade ] && . /etc/default/ru-cascade
 
@@ -36,23 +40,24 @@ fi
 rm -f "$TMP"
 [ "$(ipset list ru | grep -c '/')" -gt 1000 ] || { echo "Список российских сетей пуст - выхожу, чтобы не отправить всё в туннель"; exit 1; }
 
-# 3. Таблица маршрутов: зарубежное -> туннель; без туннеля -> блок или напрямую
-ip route replace default dev $TUN table $TABLE
-if [ "$FALLBACK" = "direct" ]; then
-  GW=$(ip route show default table main | awk '/default/{print $3; exit}')
-  DEV=$(ip route show default table main | awk '/default/{print $5; exit}')
-  ip route del blackhole default table $TABLE 2>/dev/null || true
-  ip route replace default via "$GW" dev "$DEV" table $TABLE metric 1000
-else
-  ip route replace blackhole default table $TABLE metric 1000
-fi
-ip rule show | grep -q "fwmark $MARK" || ip rule add fwmark $MARK table $TABLE priority 100
+# 3. Таблицы маршрутов (их содержимое выставляет сторож по живости туннеля):
+#    $TABLE   - зарубежный трафик: туннель жив -> туннель, туннель мёртв -> блок (или напрямую)
+#    $DNS_TABLE - DNS-запросы к зарубежным резолверам: туннель жив -> туннель, мёртв -> напрямую,
+#               чтобы российские сайты открывались, даже если зарубежный сервер недоступен
+ip rule show | grep -q "fwmark $MARK " || ip rule add fwmark $MARK table $TABLE priority 100
+ip rule show | grep -q "fwmark $DNS_MARK " || ip rule add fwmark $DNS_MARK table $DNS_TABLE priority 101
+rm -f /run/ru-cascade.state
+/usr/local/sbin/ru-cascade-watchdog.sh
 
-# 4. Метки: новые соединения из контейнеров Amnezia к НЕ российским и НЕ локальным адресам
+# 4. Метки новых соединений из контейнеров Amnezia:
+#    DNS к не российским адресам -> $DNS_MARK; прочее к не российским и не локальным -> $MARK
 iptables -t mangle -N RUCASC 2>/dev/null || iptables -t mangle -F RUCASC
 iptables -t mangle -A RUCASC -p udp --sport "$AWG_PORT" -j RETURN
 iptables -t mangle -A RUCASC -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16 -j RETURN
-iptables -t mangle -A RUCASC -m conntrack --ctstate NEW -m set ! --match-set ru dst -j CONNMARK --set-mark $MARK
+for P in udp tcp; do
+  iptables -t mangle -A RUCASC -p $P --dport 53 -m conntrack --ctstate NEW -m set ! --match-set ru dst -j CONNMARK --set-mark $DNS_MARK
+done
+iptables -t mangle -A RUCASC -m conntrack --ctstate NEW -m connmark --mark 0 -m set ! --match-set ru dst -j CONNMARK --set-mark $MARK
 iptables -t mangle -A RUCASC -j CONNMARK --restore-mark
 for IF in docker0 br-+ amn+; do
   iptables -t mangle -C PREROUTING -i $IF -j RUCASC 2>/dev/null || iptables -t mangle -I PREROUTING -i $IF -j RUCASC

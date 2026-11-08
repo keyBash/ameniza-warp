@@ -17,7 +17,7 @@ CONF_DIR=/etc/amnezia/amneziawg
 [ -f "$SRC" ] || { echo "Нет файла ключа $SRC (родной формат AmneziaWG)"; exit 1; }
 grep -q '^\[Peer\]' "$SRC" && grep -q '^Endpoint' "$SRC" || { echo "$SRC не похож на конфиг AmneziaWG"; exit 1; }
 docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^amnezia-awg' || { echo "Сначала установите Amnezia (AmneziaWG) через приложение"; exit 1; }
-sed -i 's/\r$//' "$DIR"/ru-cascade.sh "$DIR"/ru-cascade.service "$DIR"/ru-cascade.timer "$DIR"/status-ru.sh "$SRC"
+sed -i 's/\r$//' "$DIR"/ru-cascade*.sh "$DIR"/ru-cascade*.service "$DIR"/ru-cascade*.timer "$DIR"/status-ru.sh "$SRC"
 
 echo "[1/5] Пакеты AmneziaWG (может занять несколько минут - собирается модуль ядра)"
 apt-get update -qq
@@ -54,12 +54,15 @@ echo "      туннель работает: выход $EXIT_IP (этот се�
 
 echo "[4/5] Скрипт и автозапуск"
 install -m 755 "$DIR/ru-cascade.sh" /usr/local/sbin/ru-cascade.sh
+install -m 755 "$DIR/ru-cascade-watchdog.sh" /usr/local/sbin/ru-cascade-watchdog.sh
 install -m 755 "$DIR/status-ru.sh" /usr/local/sbin/ru-cascade-status
 install -m 644 "$DIR/ru-cascade.service" /etc/systemd/system/ru-cascade.service
 install -m 644 "$DIR/ru-cascade.timer" /etc/systemd/system/ru-cascade.timer
+install -m 644 "$DIR/ru-cascade-watchdog.service" /etc/systemd/system/ru-cascade-watchdog.service
+install -m 644 "$DIR/ru-cascade-watchdog.timer" /etc/systemd/system/ru-cascade-watchdog.timer
 systemctl daemon-reload
-systemctl enable ru-cascade.service ru-cascade.timer >/dev/null
-systemctl start ru-cascade.timer
+systemctl enable ru-cascade.service ru-cascade.timer ru-cascade-watchdog.timer >/dev/null
+systemctl start ru-cascade.timer ru-cascade-watchdog.timer
 
 echo "[5/5] Применение правил"
 /usr/local/sbin/ru-cascade.sh
@@ -69,7 +72,7 @@ cat <<'EOT'
 Готово.
 Проверка с ПК (Amnezia подключена к РОССИЙСКОМУ серверу, раздельное туннелирование ВЫКЛ):
   yandex.ru/internet  -> IP российского сервера
-  ifconfig.me         -> IP зарубежного сервера
+  ifconfig.me         -> IP зарубежного сервера (или Cloudflare, если на нём стоит install-fi.sh)
   chatgpt.com, youtube.com открываются
 Состояние на сервере:  ru-cascade-status
 Потом reboot и проверить ещё раз.

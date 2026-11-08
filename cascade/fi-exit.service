@@ -1,0 +1,13 @@
+[Unit]
+Description=Cascade exit: client traffic leaves via Cloudflare WARP
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/local/sbin/fi-exit.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

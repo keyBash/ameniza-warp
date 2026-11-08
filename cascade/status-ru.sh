@@ -5,7 +5,12 @@ echo "== Туннель на зарубежный сервер (fi) =="
 awg show fi 2>/dev/null | grep -E "endpoint|latest handshake|transfer" || echo "туннель не поднят: systemctl restart awg-quick@fi"
 
 echo
-echo "== Выход через туннель (должен быть IP зарубежного сервера) =="
+echo "== Сторож =="
+echo "состояние туннеля: $(cat /run/ru-cascade.state 2>/dev/null || echo неизвестно)"
+journalctl -t ru-cascade -n 3 --no-pager 2>/dev/null | tail -3
+
+echo
+echo "== Выход через туннель (IP зарубежного сервера или Cloudflare) =="
 if ip link show fi >/dev/null 2>&1; then
   ip route add 1.1.1.1 dev fi 2>/dev/null || true
   curl -s --max-time 10 https://1.1.1.1/cdn-cgi/trace | grep -E '^(ip|loc)=' || echo "нет ответа"
@@ -14,8 +19,9 @@ fi
 
 echo
 echo "== Маршрутизация =="
-ip rule show | grep 0x77 || echo "нет ip rule (запустите ru-cascade.sh)"
-ip route show table 200
+ip rule show | grep -E "0x77|0x78" || echo "нет ip rule (запустите ru-cascade.sh)"
+echo "-- зарубежный трафик (table 200):"; ip route show table 200
+echo "-- DNS (table 201):"; ip route show table 201
 
 echo
 echo "== Счётчики RUCASC (CONNMARK set 0x77 > 0 = зарубежный трафик идёт в туннель) =="
