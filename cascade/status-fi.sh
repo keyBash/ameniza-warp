@@ -20,3 +20,12 @@ ip route show table 100
 echo
 echo "== Счётчики FIEXIT (CONNMARK set 0x66 > 0 = трафик клиентов идёт в WARP) =="
 iptables -t mangle -L FIEXIT -v -n 2>/dev/null || echo "нет цепочки FIEXIT"
+
+echo
+echo "== Запрет утечки FIEXITKS (DROP > 0 = трафик пытался уйти мимо WARP и был заблокирован) =="
+iptables -L FIEXITKS -v -n 2>/dev/null || echo "нет цепочки FIEXITKS (запустите fi-exit.sh)"
+
+echo
+echo "== Сторож =="
+systemctl is-active fi-exit-watchdog.timer 2>/dev/null | sed 's/^/таймер: /'
+journalctl -t fi-exit -n 3 --no-pager 2>/dev/null | tail -3

@@ -1,0 +1,9 @@
+[Unit]
+Description=Cascade exit watchdog: keep WARP routing and leak block in place
+After=fi-exit.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fi-exit-watchdog.sh
+# Без "Starting/Finished" каждые 30 секунд: в журнале остаются только события (logger -t fi-exit) и ошибки
+LogLevelMax=notice

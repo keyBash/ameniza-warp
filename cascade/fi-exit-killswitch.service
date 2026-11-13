@@ -1,0 +1,11 @@
+[Unit]
+Description=Cascade exit: block client traffic from leaving with the server IP (before Docker starts)
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fi-exit.sh killswitch
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
