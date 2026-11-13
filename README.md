@@ -77,7 +77,14 @@ cd /root/ameniza-warp && git pull && bash cascade/install-ru.sh
 ```
 Проверка с ПК через российский сервер: `ifconfig.me` → IP Cloudflare (104.28.x.x), `yandex.ru/internet` → IP Москвы. Состояние: `fi-exit-status` на зарубежном, `ru-cascade-status` на российском.
 
-**Сторож** на российском сервере каждые 30 секунд проверяет, жив ли туннель (handshake моложе 3 минут). Если туннель мёртв, DNS-запросы идут напрямую из Москвы (российские сайты продолжают работать), а зарубежный трафик блокируется. Когда туннель оживает, всё переключается обратно само. Журнал: `journalctl -t ru-cascade`.
+**Сторож** на российском сервере каждые 30 секунд проверяет, жив ли туннель (handshake моложе 3 минут). Если туннель мёртв, DNS-запросы идут напрямую из Москвы (российские сайты продолжают работать), а зарубежный трафик блокируется. Когда туннель оживает, всё переключается обратно само. Заодно сторож проверяет, что правила маршрутизации каскада (`ip rule`, таблицы 200 и 201) на месте, и ставит их заново, если их стёрли. Журнал: `journalctl -t ru-cascade`.
+
+**systemd-networkd** по умолчанию при каждом своём перезапуске (например, когда автообновление обновляет systemd) удаляет правила маршрутизации, которые создал не он. Без них на российском сервере зарубежный трафик уходит напрямую с российского IP, а на зарубежном — с IP сервера мимо WARP. Оба установщика кладут `/etc/systemd/networkd.conf.d/10-cascade.conf`, который это запрещает.
+
+**Обновить скрипты на работающем российском сервере**, не трогая туннель (например, если `/root/ru-gateway.conf` уже удалён):
+```bash
+cd /root/ameniza-warp && git pull && install -m 755 cascade/ru-cascade.sh cascade/ru-cascade-watchdog.sh /usr/local/sbin/ && install -m 755 cascade/status-ru.sh /usr/local/sbin/ru-cascade-status && install -m 644 cascade/ru-cascade*.service cascade/ru-cascade*.timer /etc/systemd/system/ && install -D -m 644 cascade/networkd-cascade.conf /etc/systemd/networkd.conf.d/10-cascade.conf && systemctl daemon-reload && systemctl restart ru-cascade
+```
 
 **Если туннель упал**, по умолчанию зарубежные сайты не открываются (`FALLBACK=block`). Чтобы при падении зарубежное шло напрямую с российского IP: `echo FALLBACK=direct > /etc/default/ru-cascade && systemctl restart ru-cascade`.
 
@@ -371,6 +378,7 @@ foreach ($c in $codes) {
 | Ozon / банк пишет «выключите VPN» | Нормально: сервис не пускает IP Cloudflare. На своих устройствах раздельное туннелирование, друзьям выключать VPN. |
 | Новый IP «в бане» сразу после выдачи | Хостер выдаёт засвеченные чужие адреса. Просить **новый, ранее не использованный** IP или другую локацию. |
 | `docker logs` не работает | Amnezia отключает логи, это нормально. |
+| Каскад: `ifconfig.me` показывает IP российского сервера, `ru-cascade-status` пишет «нет ip rule», цифры `received` в `awg show fi` не растут | Правила маршрутизации стёрты, обычно перезапуском systemd-networkd (см. раздел «Каскад»). Сторож восстанавливает их сам за 30 секунд. Вручную: `/usr/local/sbin/ru-cascade.sh`. Проверить, что есть `/etc/systemd/networkd.conf.d/10-cascade.conf` на обоих серверах. |
 
 ---
 

@@ -1,9 +1,15 @@
 #!/bin/bash
-# Сторож туннеля каскада: каждые 30 секунд проверяет, жив ли туннель "fi",
-# и переключает таблицы маршрутов. Туннель считается живым, если последний
-# handshake был меньше MAXAGE секунд назад (keepalive 25 с, rekey 2 мин).
+# Сторож туннеля каскада, запускается каждые 30 секунд.
+# 1) Туннель "fi" считается живым, если последний handshake был меньше MAXAGE секунд назад
+#    (keepalive 25 с, rekey 2 мин). По живости туннеля переключаются таблицы маршрутов.
+# 2) При каждом запуске проверяет, что правила (ip rule) и маршруты каскада на месте, и ставит
+#    их заново, если их кто-то стёр (например, systemd-networkd при перезапуске после автообновления)
+#    или они пропали вместе со старым интерфейсом fi после его перезапуска.
+#    Без правил зарубежный трафик молча уходит напрямую с российского IP.
 TUN=fi
+MARK=0x77
 TABLE=200
+DNS_MARK=0x78
 DNS_TABLE=201
 MAXAGE=180
 FALLBACK=block
@@ -12,6 +18,15 @@ STATE_FILE=/run/ru-cascade.state
 
 GW=$(ip route show default table main | awk '/default/{print $3; exit}')
 DEV=$(ip route show default table main | awk '/default/{print $5; exit}')
+
+# Правила: пакеты с метками каскада ищут маршрут в его таблицах
+for R in "$MARK $TABLE 100" "$DNS_MARK $DNS_TABLE 101"; do
+  set -- $R
+  if ! ip rule show | grep -q "fwmark $1 "; then
+    ip rule add fwmark "$1" table "$2" priority "$3"
+    logger -t ru-cascade "правило fwmark $1 -> table $2 пропало, восстановлено"
+  fi
+done
 
 state=down
 if ip link show $TUN >/dev/null 2>&1; then
@@ -22,7 +37,27 @@ if ip link show $TUN >/dev/null 2>&1; then
   fi
 fi
 
-[ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "$state" ] && exit 0
+# Маршруты в таблицах соответствуют состоянию туннеля?
+direct_ok() { [ -z "$GW" ] || grep -q "via $GW dev $DEV" <<<"$1"; }
+routes_ok() {
+  local fwd dns
+  fwd=$(ip route show table $TABLE 2>/dev/null)
+  dns=$(ip route show table $DNS_TABLE 2>/dev/null)
+  direct_ok "$dns" || return 1
+  if [ "$state" = up ]; then
+    grep -q "dev $TUN" <<<"$fwd" && grep -q '^blackhole' <<<"$fwd" && grep -q "dev $TUN" <<<"$dns"
+  elif [ "$FALLBACK" = "direct" ]; then
+    direct_ok "$fwd"
+  else
+    grep -q '^blackhole' <<<"$fwd"
+  fi
+}
+
+msg="туннель $TUN: $state"
+if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "$state" ]; then
+  routes_ok && exit 0
+  msg="$msg, маршруты пропали - восстановлены"
+fi
 
 ip route flush table $TABLE 2>/dev/null || true
 ip route flush table $DNS_TABLE 2>/dev/null || true
@@ -41,5 +76,5 @@ else
 fi
 ip route flush cache 2>/dev/null || true
 echo "$state" > "$STATE_FILE"
-logger -t ru-cascade "туннель $TUN: $state (FALLBACK=$FALLBACK)"
-echo "туннель $TUN: $state"
+logger -t ru-cascade "$msg (FALLBACK=$FALLBACK)"
+echo "$msg"

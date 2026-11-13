@@ -17,7 +17,7 @@ CONF_DIR=/etc/amnezia/amneziawg
 [ -f "$SRC" ] || { echo "Нет файла ключа $SRC (родной формат AmneziaWG)"; exit 1; }
 grep -q '^\[Peer\]' "$SRC" && grep -q '^Endpoint' "$SRC" || { echo "$SRC не похож на конфиг AmneziaWG"; exit 1; }
 docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^amnezia-awg' || { echo "Сначала установите Amnezia (AmneziaWG) через приложение"; exit 1; }
-sed -i 's/\r$//' "$DIR"/ru-cascade*.sh "$DIR"/ru-cascade*.service "$DIR"/ru-cascade*.timer "$DIR"/status-ru.sh "$SRC"
+sed -i 's/\r$//' "$DIR"/ru-cascade*.sh "$DIR"/ru-cascade*.service "$DIR"/ru-cascade*.timer "$DIR"/status-ru.sh "$DIR"/networkd-cascade.conf "$SRC"
 
 echo "[1/5] Пакеты AmneziaWG (может занять несколько минут - собирается модуль ядра)"
 apt-get update -qq
@@ -60,6 +60,9 @@ install -m 644 "$DIR/ru-cascade.service" /etc/systemd/system/ru-cascade.service
 install -m 644 "$DIR/ru-cascade.timer" /etc/systemd/system/ru-cascade.timer
 install -m 644 "$DIR/ru-cascade-watchdog.service" /etc/systemd/system/ru-cascade-watchdog.service
 install -m 644 "$DIR/ru-cascade-watchdog.timer" /etc/systemd/system/ru-cascade-watchdog.timer
+# networkd не должен стирать правила каскада при своих перезапусках (иначе всё идёт мимо туннеля)
+install -D -m 644 "$DIR/networkd-cascade.conf" /etc/systemd/networkd.conf.d/10-cascade.conf
+systemctl try-restart systemd-networkd 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable ru-cascade.service ru-cascade.timer ru-cascade-watchdog.timer >/dev/null
 systemctl start ru-cascade.timer ru-cascade-watchdog.timer

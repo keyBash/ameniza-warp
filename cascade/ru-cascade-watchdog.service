@@ -5,3 +5,5 @@ After=ru-cascade.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/ru-cascade-watchdog.sh
+# Без "Starting/Finished" каждые 30 секунд: в журнале остаются только события (logger -t ru-cascade) и ошибки
+LogLevelMax=notice

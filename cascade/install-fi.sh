@@ -9,7 +9,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 [ "$(id -u)" -eq 0 ] || { echo "Запускать от root"; exit 1; }
 docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^amnezia-awg' || { echo "Сначала установите Amnezia (AmneziaWG) через приложение"; exit 1; }
-sed -i 's/\r$//' "$DIR"/fi-exit.sh "$DIR"/fi-exit.service "$DIR"/status-fi.sh
+sed -i 's/\r$//' "$DIR"/fi-exit.sh "$DIR"/fi-exit.service "$DIR"/status-fi.sh "$DIR"/networkd-cascade.conf
 
 echo "[1/4] Пакеты"
 apt-get update -qq
@@ -47,6 +47,9 @@ echo "[3/4] Скрипт и автозапуск"
 install -m 755 "$DIR/fi-exit.sh" /usr/local/sbin/fi-exit.sh
 install -m 755 "$DIR/status-fi.sh" /usr/local/sbin/fi-exit-status
 install -m 644 "$DIR/fi-exit.service" /etc/systemd/system/fi-exit.service
+# networkd не должен стирать правило WARP при своих перезапусках (иначе трафик уходит с IP сервера)
+install -D -m 644 "$DIR/networkd-cascade.conf" /etc/systemd/networkd.conf.d/10-cascade.conf
+systemctl try-restart systemd-networkd 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable fi-exit.service >/dev/null
 
